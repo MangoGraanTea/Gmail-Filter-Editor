@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gmail 篩選器編輯器 V4</title>
+    <title>Gmail 篩選器編輯器 V5 (分類群組版)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f4f7f6;
             color: #333;
-            max-width: 850px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 0 20px 20px 20px;
         }
-        /* 警示橫幅樣式 */
         .warning-banner {
             background-color: #fff3cd;
             color: #856404;
@@ -46,7 +45,7 @@
             margin-bottom: 10px;
         }
         .form-group label {
-            width: 120px;
+            width: 130px;
             font-weight: bold;
             color: #555;
         }
@@ -56,10 +55,32 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-        .category-input {
-            border-left: 3px solid #f39c12 !important;
-            background-color: #fdfbf7;
+        
+        /* 群組分類樣式 */
+        .category-group {
+            background: #e8eaed;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            border-top: 4px solid #7f8c8d;
         }
+        .category-title {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .count-badge {
+            background: #34495e;
+            color: white;
+            font-size: 0.6em;
+            padding: 3px 8px;
+            border-radius: 12px;
+            vertical-align: middle;
+        }
+
         .filter-card {
             background: #fff;
             padding: 15px;
@@ -69,10 +90,12 @@
             border-left: 4px solid #3498db;
             position: relative;
         }
+        .filter-card:last-child { margin-bottom: 0; }
         .filter-card h3 {
             margin-top: 0;
             color: #2c3e50;
             font-size: 1.1em;
+            margin-bottom: 15px;
         }
         .filter-actions {
             position: absolute;
@@ -124,7 +147,7 @@
         ⚠️ 注意：本工具為純網頁應用，不會儲存任何資料。每次「重新整理」或「關閉網頁」時，所有未匯出的內容皆會被清除。請隨時點擊下方按鈕匯出檔案備份！
     </div>
 
-    <h1>Gmail 篩選器編輯器</h1>
+    <h1>Gmail 篩選器分類編輯器</h1>
     
     <div class="header-info">
         <div style="flex:1">
@@ -151,17 +174,19 @@
     <script>
         let filters = [];
 
-        // 強制初始化：每次載入或重新整理網頁時執行
         window.onload = function() {
-            // 清空陣列
             filters = [];
-            // 強制清空瀏覽器可能保留的輸入框內容
             document.getElementById('author-name').value = '';
             document.getElementById('author-email').value = '';
             document.getElementById('file-input').value = '';
-            // 渲染空白畫面
             renderFilters();
         };
+
+        // 核心邏輯：從標籤中提取主類別
+        function getCategory(label) {
+            if (!label || label.trim() === '') return '未分類 (請填寫標籤)';
+            return label.split('/')[0].trim();
+        }
 
         function renderFilters() {
             const container = document.getElementById('filters-container');
@@ -171,50 +196,87 @@
                 return;
             }
 
-            container.innerHTML = '';
+            // 1. 將篩選器依照類別分組，並記錄其在原始陣列中的 index
+            const groupedFilters = {};
             filters.forEach((filter, index) => {
-                const card = document.createElement('div');
-                card.className = 'filter-card';
-                card.innerHTML = `
-                    <h3>篩選器 #${index + 1}</h3>
-                    <div class="filter-actions">
-                        <button class="btn btn-move" onclick="moveUp(${index})" ${index === 0 ? 'disabled' : ''}>⬆️</button>
-                        <button class="btn btn-move" onclick="moveDown(${index})" ${index === filters.length - 1 ? 'disabled' : ''}>⬇️</button>
-                        <button class="btn btn-delete" onclick="removeFilter(${index})">刪除</button>
-                    </div>
-                    
-                    <div class="form-group" style="margin-top: 15px;">
-                        <label>自訂類別 (備註):</label>
-                        <input type="text" class="category-input" placeholder="用於 XML 內備註記錄" value="${filter.customCategory || ''}" onchange="updateFilter(${index}, 'customCategory', this.value)">
-                    </div>
-                    <hr style="border: 0; border-top: 1px dashed #ddd; margin: 15px 0;">
-                    <div class="form-group">
-                        <label>寄件者 (from):</label>
-                        <input type="text" value="${filter.from || ''}" onchange="updateFilter(${index}, 'from', this.value)">
-                    </div>
-                    <div class="form-group">
-                        <label>收件者 (to):</label>
-                        <input type="text" value="${filter.to || ''}" onchange="updateFilter(${index}, 'to', this.value)">
-                    </div>
-                    <div class="form-group">
-                        <label>包含主旨 (subject):</label>
-                        <input type="text" value="${filter.subject || ''}" onchange="updateFilter(${index}, 'subject', this.value)">
-                    </div>
-                    <div class="form-group">
-                        <label>套用標籤 (label):</label>
-                        <input type="text" value="${filter.label || ''}" onchange="updateFilter(${index}, 'label', this.value)">
-                    </div>
-                `;
-                container.appendChild(card);
+                const category = getCategory(filter.label);
+                if (!groupedFilters[category]) {
+                    groupedFilters[category] = [];
+                }
+                groupedFilters[category].push({ filter, originalIndex: index });
             });
+
+            container.innerHTML = '';
+
+            // 2. 渲染每個類別群組
+            for (const category in groupedFilters) {
+                const groupItems = groupedFilters[category];
+                
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'category-group';
+                
+                // 類別標題
+                const title = document.createElement('h2');
+                title.className = 'category-title';
+                title.innerHTML = `📂 ${category} <span class="count-badge">${groupItems.length} 項</span>`;
+                groupDiv.appendChild(title);
+
+                // 渲染該類別下的篩選器
+                groupItems.forEach((item, indexInGroup) => {
+                    const { filter, originalIndex } = item;
+                    
+                    // 計算上下移動要交換的目標 Index
+                    const canMoveUp = indexInGroup > 0;
+                    const canMoveDown = indexInGroup < groupItems.length - 1;
+                    const targetIndexUp = canMoveUp ? groupItems[indexInGroup - 1].originalIndex : null;
+                    const targetIndexDown = canMoveDown ? groupItems[indexInGroup + 1].originalIndex : null;
+
+                    const card = document.createElement('div');
+                    card.className = 'filter-card';
+                    card.innerHTML = `
+                        <h3>編輯項目 (原序 #${originalIndex + 1})</h3>
+                        <div class="filter-actions">
+                            <button class="btn btn-move" onclick="swapFilters(${originalIndex}, ${targetIndexUp})" ${!canMoveUp ? 'disabled' : ''}>⬆️</button>
+                            <button class="btn btn-move" onclick="swapFilters(${originalIndex}, ${targetIndexDown})" ${!canMoveDown ? 'disabled' : ''}>⬇️</button>
+                            <button class="btn btn-delete" onclick="removeFilter(${originalIndex})">刪除</button>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>套用標籤 (label):</label>
+                            <input type="text" placeholder="例如: 金融機構/將來銀行" value="${filter.label || ''}" 
+                                   onchange="updateFilter(${originalIndex}, 'label', this.value)"
+                                   style="border-color: #3498db; background-color: #f0f8ff;">
+                        </div>
+                        <div class="form-group">
+                            <label>寄件者 (from):</label>
+                            <input type="text" value="${filter.from || ''}" onchange="updateFilter(${originalIndex}, 'from', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>收件者 (to):</label>
+                            <input type="text" value="${filter.to || ''}" onchange="updateFilter(${originalIndex}, 'to', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>包含主旨 (subject):</label>
+                            <input type="text" value="${filter.subject || ''}" onchange="updateFilter(${originalIndex}, 'subject', this.value)">
+                        </div>
+                    `;
+                    groupDiv.appendChild(card);
+                });
+
+                container.appendChild(groupDiv);
+            }
         }
 
         function updateFilter(index, field, value) {
             filters[index][field] = value.trim();
+            // 如果修改的是 label，必須重新渲染來更新分類群組
+            if (field === 'label') {
+                renderFilters();
+            }
         }
 
         function addFilter() {
-            filters.push({ customCategory: '', from: '', to: '', subject: '', label: '' });
+            filters.push({ from: '', to: '', subject: '', label: '' });
             renderFilters();
             window.scrollTo(0, document.body.scrollHeight);
         }
@@ -224,16 +286,10 @@
             renderFilters();
         }
 
-        function moveUp(index) {
-            if (index > 0) {
-                [filters[index - 1], filters[index]] = [filters[index], filters[index - 1]];
-                renderFilters();
-            }
-        }
-
-        function moveDown(index) {
-            if (index < filters.length - 1) {
-                [filters[index], filters[index + 1]] = [filters[index + 1], filters[index]];
+        // 交換兩個篩選器在原始陣列中的位置 (僅限同群組內交換)
+        function swapFilters(index1, index2) {
+            if (index1 !== null && index2 !== null) {
+                [filters[index1], filters[index2]] = [filters[index2], filters[index1]];
                 renderFilters();
             }
         }
@@ -258,20 +314,7 @@
 
                 for (let i = 0; i < entries.length; i++) {
                     const entry = entries[i];
-                    let filterObj = { customCategory: '', from: '', to: '', subject: '', label: '' };
-
-                    let prevNode = entry.previousSibling;
-                    while (prevNode) {
-                        if (prevNode.nodeType === 8) { 
-                            const match = prevNode.nodeValue.match(/類別:\s*(.*)/);
-                            if (match) {
-                                filterObj.customCategory = match[1].trim();
-                                break;
-                            }
-                        }
-                        if (prevNode.nodeType === 1 || (prevNode.nodeType === 3 && prevNode.nodeValue.trim() !== "")) break;
-                        prevNode = prevNode.previousSibling;
-                    }
+                    let filterObj = { from: '', to: '', subject: '', label: '' };
 
                     const properties = entry.getElementsByTagName("apps:property");
                     for (let j = 0; j < properties.length; j++) {
@@ -287,7 +330,7 @@
                 if (newFilters.length > 0) {
                     filters = newFilters;
                     renderFilters();
-                    alert(`成功匯入 ${newFilters.length} 個篩選器！`);
+                    alert(`成功匯入 ${newFilters.length} 個篩選器！已自動為您分類。`);
                 } else {
                     alert("無法在檔案中找到有效的篩選器條目。");
                 }
@@ -315,7 +358,9 @@
             filters.forEach((f, i) => {
                 if (!f.from && !f.to && !f.subject && !f.label) return;
 
-                if (f.customCategory) {
+                // 動態計算並輸出註解，方便原始碼閱讀
+                const categoryName = getCategory(f.label);
+                if (categoryName && categoryName !== '未分類 (請填寫標籤)') {
                     xml += `\n\t\n`;
                 }
 
@@ -342,7 +387,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'mailFilters_edited.xml';
+            a.download = 'mailFilters_categorized.xml';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

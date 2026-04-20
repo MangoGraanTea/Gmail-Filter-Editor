@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail 篩選器編輯器 V4</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            max-width: 850px;
+            margin: 0 auto;
+            padding: 0 20px 20px 20px;
+        }
+        /* 警示橫幅樣式 */
+        .warning-banner {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            margin: 0 -20px 20px -20px;
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 2px solid #ffeeba;
+            font-size: 1.1em;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .header-info {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .form-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .form-group label {
+            width: 120px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .category-input {
+            border-left: 3px solid #f39c12 !important;
+            background-color: #fdfbf7;
+        }
+        .filter-card {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+            position: relative;
+        }
+        .filter-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        .filter-actions {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            display: flex;
+            gap: 8px;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            font-size: 0.9em;
+        }
+        .btn:disabled { background-color: #bdc3c7; cursor: not-allowed; color: #7f8c8d; }
+        .btn-move { background-color: #ecf0f1; color: #34495e; border: 1px solid #bdc3c7; }
+        .btn-move:hover:not(:disabled) { background-color: #d5dbdb; }
+        .btn-add { background-color: #3498db; color: white; }
+        .btn-add:hover { background-color: #2980b9; }
+        .btn-delete { background-color: #e74c3c; color: white; }
+        .btn-delete:hover { background-color: #c0392b; }
+        .btn-export { background-color: #2ecc71; color: white; }
+        .btn-export:hover { background-color: #27ae60; }
+        .btn-import { background-color: #9b59b6; color: white; }
+        .btn-import:hover { background-color: #8e44ad; }
+        
+        .main-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            background: #fff;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="warning-banner">
+        ⚠️ 注意：本工具為純網頁應用，不會儲存任何資料。每次「重新整理」或「關閉網頁」時，所有未匯出的內容皆會被清除。請隨時點擊下方按鈕匯出檔案備份！
+    </div>
+
+    <h1>Gmail 篩選器編輯器</h1>
+    
+    <div class="header-info">
+        <div style="flex:1">
+            <label for="author-name">作者名稱:</label><br>
+            <input type="text" id="author-name" value="" placeholder="請輸入作者名稱" style="width: 90%; padding: 5px;">
+        </div>
+        <div style="flex:1">
+            <label for="author-email">電子郵件:</label><br>
+            <input type="email" id="author-email" value="" placeholder="請輸入電子郵件" style="width: 90%; padding: 5px;">
+        </div>
+    </div>
+
+    <div id="filters-container">
+        </div>
+
+    <div class="main-controls">
+        <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📂 讀取 XML 檔案</button>
+        <button class="btn btn-add" onclick="addFilter()">➕ 新增空白篩選器</button>
+        <button class="btn btn-export" onclick="exportXML()">⬇️ 匯出 XML 檔案</button>
+    </div>
+    
+    <input type="file" id="file-input" accept=".xml" style="display: none;" onchange="importXML(event)">
+
+    <script>
+        let filters = [];
+
+        // 強制初始化：每次載入或重新整理網頁時執行
+        window.onload = function() {
+            // 清空陣列
+            filters = [];
+            // 強制清空瀏覽器可能保留的輸入框內容
+            document.getElementById('author-name').value = '';
+            document.getElementById('author-email').value = '';
+            document.getElementById('file-input').value = '';
+            // 渲染空白畫面
+            renderFilters();
+        };
+
+        function renderFilters() {
+            const container = document.getElementById('filters-container');
+            
+            if (filters.length === 0) {
+                container.innerHTML = `<div class="empty-state">目前沒有篩選器。請點擊下方按鈕新增或匯入檔案。</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            filters.forEach((filter, index) => {
+                const card = document.createElement('div');
+                card.className = 'filter-card';
+                card.innerHTML = `
+                    <h3>篩選器 #${index + 1}</h3>
+                    <div class="filter-actions">
+                        <button class="btn btn-move" onclick="moveUp(${index})" ${index === 0 ? 'disabled' : ''}>⬆️</button>
+                        <button class="btn btn-move" onclick="moveDown(${index})" ${index === filters.length - 1 ? 'disabled' : ''}>⬇️</button>
+                        <button class="btn btn-delete" onclick="removeFilter(${index})">刪除</button>
+                    </div>
+                    
+                    <div class="form-group" style="margin-top: 15px;">
+                        <label>自訂類別 (備註):</label>
+                        <input type="text" class="category-input" placeholder="用於 XML 內備註記錄" value="${filter.customCategory || ''}" onchange="updateFilter(${index}, 'customCategory', this.value)">
+                    </div>
+                    <hr style="border: 0; border-top: 1px dashed #ddd; margin: 15px 0;">
+                    <div class="form-group">
+                        <label>寄件者 (from):</label>
+                        <input type="text" value="${filter.from || ''}" onchange="updateFilter(${index}, 'from', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>收件者 (to):</label>
+                        <input type="text" value="${filter.to || ''}" onchange="updateFilter(${index}, 'to', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>包含主旨 (subject):</label>
+                        <input type="text" value="${filter.subject || ''}" onchange="updateFilter(${index}, 'subject', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>套用標籤 (label):</label>
+                        <input type="text" value="${filter.label || ''}" onchange="updateFilter(${index}, 'label', this.value)">
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateFilter(index, field, value) {
+            filters[index][field] = value.trim();
+        }
+
+        function addFilter() {
+            filters.push({ customCategory: '', from: '', to: '', subject: '', label: '' });
+            renderFilters();
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        function removeFilter(index) {
+            filters.splice(index, 1);
+            renderFilters();
+        }
+
+        function moveUp(index) {
+            if (index > 0) {
+                [filters[index - 1], filters[index]] = [filters[index], filters[index - 1]];
+                renderFilters();
+            }
+        }
+
+        function moveDown(index) {
+            if (index < filters.length - 1) {
+                [filters[index], filters[index + 1]] = [filters[index + 1], filters[index]];
+                renderFilters();
+            }
+        }
+
+        function importXML(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const xmlText = e.target.result;
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+                
+                const authorName = xmlDoc.querySelector("author name")?.textContent;
+                const authorEmail = xmlDoc.querySelector("author email")?.textContent;
+                if(authorName) document.getElementById('author-name').value = authorName;
+                if(authorEmail) document.getElementById('author-email').value = authorEmail;
+
+                const entries = xmlDoc.getElementsByTagName("entry");
+                const newFilters = [];
+
+                for (let i = 0; i < entries.length; i++) {
+                    const entry = entries[i];
+                    let filterObj = { customCategory: '', from: '', to: '', subject: '', label: '' };
+
+                    let prevNode = entry.previousSibling;
+                    while (prevNode) {
+                        if (prevNode.nodeType === 8) { 
+                            const match = prevNode.nodeValue.match(/類別:\s*(.*)/);
+                            if (match) {
+                                filterObj.customCategory = match[1].trim();
+                                break;
+                            }
+                        }
+                        if (prevNode.nodeType === 1 || (prevNode.nodeType === 3 && prevNode.nodeValue.trim() !== "")) break;
+                        prevNode = prevNode.previousSibling;
+                    }
+
+                    const properties = entry.getElementsByTagName("apps:property");
+                    for (let j = 0; j < properties.length; j++) {
+                        const name = properties[j].getAttribute("name");
+                        const value = properties[j].getAttribute("value");
+                        if (filterObj.hasOwnProperty(name)) {
+                            filterObj[name] = value;
+                        }
+                    }
+                    newFilters.push(filterObj);
+                }
+
+                if (newFilters.length > 0) {
+                    filters = newFilters;
+                    renderFilters();
+                    alert(`成功匯入 ${newFilters.length} 個篩選器！`);
+                } else {
+                    alert("無法在檔案中找到有效的篩選器條目。");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function exportXML() {
+            if (filters.length === 0) {
+                alert("目前沒有篩選器可以匯出！");
+                return;
+            }
+            const authorName = document.getElementById('author-name').value || 'User';
+            const authorEmail = document.getElementById('author-email').value || 'user@example.com';
+            const now = new Date().toISOString();
+            
+            let xml = `<?xml version='1.0' encoding='UTF-8'?>\n`;
+            xml += `<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>\n`;
+            xml += `\t<title>Mail Filters</title>\n`;
+            xml += `\t<id>tag:mail.google.com,2008:filters:exported</id>\n`;
+            xml += `\t<updated>${now}</updated>\n`;
+            xml += `\t<author>\n\t\t<name>${authorName}</name>\n\t\t<email>${authorEmail}</email>\n\t</author>\n`;
+
+            filters.forEach((f, i) => {
+                if (!f.from && !f.to && !f.subject && !f.label) return;
+
+                if (f.customCategory) {
+                    xml += `\n\t\n`;
+                }
+
+                xml += `\t<entry>\n`;
+                xml += `\t\t<category term='filter'></category>\n`;
+                xml += `\t\t<title>Mail Filter</title>\n`;
+                xml += `\t\t<id>tag:mail.google.com,2008:filter:exported_${Date.now()}_${i}</id>\n`;
+                xml += `\t\t<updated>${now}</updated>\n`;
+                xml += `\t\t<content></content>\n`;
+                
+                if (f.from) xml += `\t\t<apps:property name='from' value='${f.from}'/>\n`;
+                if (f.to) xml += `\t\t<apps:property name='to' value='${f.to}'/>\n`;
+                if (f.subject) xml += `\t\t<apps:property name='subject' value='${f.subject}'/>\n`;
+                if (f.label) xml += `\t\t<apps:property name='label' value='${f.label}'/>\n`;
+                
+                xml += `\t\t<apps:property name='sizeOperator' value='s_sl'/>\n`;
+                xml += `\t\t<apps:property name='sizeUnit' value='s_smb'/>\n`;
+                xml += `\t</entry>\n`;
+            });
+
+            xml += `</feed>`;
+
+            const blob = new Blob([xml], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mailFilters_edited.xml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

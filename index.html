@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gmail 篩選器編輯器 V5 (分類群組版)</title>
+    <title>Gmail 篩選器編輯器 V6 (分頁與標籤管理版)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -26,10 +26,48 @@
         }
         h1 {
             color: #2c3e50;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
             margin-top: 0;
+            margin-bottom: 20px;
         }
+        
+        /* 分頁系統樣式 */
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #3498db;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 12px 25px;
+            cursor: pointer;
+            background: #ecf0f1;
+            border: none;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #7f8c8d;
+            border-radius: 8px 8px 0 0;
+            margin-right: 5px;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            background: #d5dbdb;
+            color: #2c3e50;
+        }
+        .tab-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .header-info {
             background: #fff;
             padding: 15px;
@@ -56,18 +94,37 @@
             border-radius: 4px;
         }
         
-        /* 群組分類樣式 */
+        /* 群組分類與摺疊樣式 */
+        .group-actions {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
         .category-group {
             background: #e8eaed;
-            padding: 15px 20px;
             border-radius: 8px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             border-top: 4px solid #7f8c8d;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .category-title {
-            margin-top: 0;
-            margin-bottom: 15px;
+        .category-header {
+            padding: 15px 20px;
+            background: #d5dbdb;
             color: #2c3e50;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .category-header:hover {
+            background: #bdc3c7;
+        }
+        .category-header-title {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -75,10 +132,17 @@
         .count-badge {
             background: #34495e;
             color: white;
-            font-size: 0.6em;
-            padding: 3px 8px;
+            font-size: 0.7em;
+            padding: 3px 10px;
             border-radius: 12px;
             vertical-align: middle;
+        }
+        .category-body {
+            padding: 15px 20px;
+            display: none; /* 預設隱藏 (由 JS 控制) */
+        }
+        .category-body.open {
+            display: block;
         }
 
         .filter-card {
@@ -104,6 +168,38 @@
             display: flex;
             gap: 8px;
         }
+        
+        /* 標籤管理樣式 */
+        .tag-list-item {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-left: 4px solid #9b59b6;
+        }
+        .tag-name-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+        .tag-edit-box {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+        }
+        .tag-edit-box input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+        }
+
+        /* 按鈕共用樣式 */
         .btn {
             padding: 8px 12px;
             border: none;
@@ -124,6 +220,10 @@
         .btn-export:hover { background-color: #27ae60; }
         .btn-import { background-color: #9b59b6; color: white; }
         .btn-import:hover { background-color: #8e44ad; }
+        .btn-outline { background-color: transparent; border: 2px solid #34495e; color: #34495e; }
+        .btn-outline:hover { background-color: #34495e; color: white; }
+        .btn-save { background-color: #f39c12; color: white; }
+        .btn-save:hover { background-color: #d68910; }
         
         .main-controls {
             display: grid;
@@ -160,72 +260,126 @@
         </div>
     </div>
 
-    <div id="filters-container">
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('editor')">📝 篩選器編輯</button>
+        <button class="tab-btn" onclick="switchTab('tags')">🏷️ 標籤總管</button>
+    </div>
+
+    <div id="tab-editor" class="tab-content active">
+        
+        <div class="group-actions" id="group-actions" style="display: none;">
+            <button class="btn btn-outline" onclick="setAllGroupsState(true)">📂 全部展開</button>
+            <button class="btn btn-outline" onclick="setAllGroupsState(false)">📁 全部收合</button>
         </div>
 
-    <div class="main-controls">
-        <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📂 讀取 XML 檔案</button>
-        <button class="btn btn-add" onclick="addFilter()">➕ 新增空白篩選器</button>
-        <button class="btn btn-export" onclick="exportXML()">⬇️ 匯出 XML 檔案</button>
+        <div id="filters-container">
+            </div>
+
+        <div class="main-controls">
+            <button class="btn btn-import" onclick="document.getElementById('file-input').click()">📂 讀取 XML 檔案</button>
+            <button class="btn btn-add" onclick="addFilter()">➕ 新增空白篩選器</button>
+            <button class="btn btn-export" onclick="exportXML()">⬇️ 匯出 XML 檔案</button>
+        </div>
+        <input type="file" id="file-input" accept=".xml" style="display: none;" onchange="importXML(event)">
     </div>
-    
-    <input type="file" id="file-input" accept=".xml" style="display: none;" onchange="importXML(event)">
+
+    <div id="tab-tags" class="tab-content">
+        <div class="warning-banner" style="background-color: #e8f4f8; color: #1e8449; border-color: #d1f2eb; margin-top: 0;">
+            💡 這裡會列出所有已使用的「完整標籤名稱」。在這裡修改標籤，將會一次性同步更新所有對應的篩選器！
+        </div>
+        <div id="tags-container">
+            </div>
+    </div>
 
     <script>
         let filters = [];
+        // 紀錄摺疊狀態，Key 為分類名稱，Value 為 true(展開) 或 false(收合)。預設為 false。
+        let groupOpenState = {}; 
 
         window.onload = function() {
             filters = [];
+            groupOpenState = {};
             document.getElementById('author-name').value = '';
             document.getElementById('author-email').value = '';
             document.getElementById('file-input').value = '';
             renderFilters();
         };
 
-        // 核心邏輯：從標籤中提取主類別
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            if (tabName === 'editor') {
+                document.getElementById('tab-editor').classList.add('active');
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                renderFilters();
+            } else if (tabName === 'tags') {
+                document.getElementById('tab-tags').classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                renderTags();
+            }
+        }
+
         function getCategory(label) {
             if (!label || label.trim() === '') return '未分類 (請填寫標籤)';
             return label.split('/')[0].trim();
         }
 
+        // --- 核心：渲染編輯器 ---
         function renderFilters() {
             const container = document.getElementById('filters-container');
+            const groupActionsBtn = document.getElementById('group-actions');
             
             if (filters.length === 0) {
                 container.innerHTML = `<div class="empty-state">目前沒有篩選器。請點擊下方按鈕新增或匯入檔案。</div>`;
+                groupActionsBtn.style.display = 'none';
                 return;
             }
 
-            // 1. 將篩選器依照類別分組，並記錄其在原始陣列中的 index
+            groupActionsBtn.style.display = 'flex';
+
+            // 依照類別分組
             const groupedFilters = {};
             filters.forEach((filter, index) => {
                 const category = getCategory(filter.label);
                 if (!groupedFilters[category]) {
                     groupedFilters[category] = [];
+                    // 如果是新出現的分類，預設設定為「收合 (false)」
+                    if (groupOpenState[category] === undefined) {
+                        groupOpenState[category] = false;
+                    }
                 }
                 groupedFilters[category].push({ filter, originalIndex: index });
             });
 
             container.innerHTML = '';
 
-            // 2. 渲染每個類別群組
             for (const category in groupedFilters) {
                 const groupItems = groupedFilters[category];
+                const isOpen = groupOpenState[category];
                 
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'category-group';
                 
-                // 類別標題
-                const title = document.createElement('h2');
-                title.className = 'category-title';
-                title.innerHTML = `📂 ${category} <span class="count-badge">${groupItems.length} 項</span>`;
-                groupDiv.appendChild(title);
+                // 標題 (點擊可觸發摺疊)
+                const header = document.createElement('div');
+                header.className = 'category-header';
+                header.onclick = () => toggleGroup(category);
+                header.innerHTML = `
+                    <div class="category-header-title">
+                        ${isOpen ? '📂' : '📁'} ${category} 
+                        <span class="count-badge">${groupItems.length} 項</span>
+                    </div>
+                    <div>${isOpen ? '▲' : '▼'}</div>
+                `;
+                groupDiv.appendChild(header);
 
-                // 渲染該類別下的篩選器
+                // 內容區塊
+                const body = document.createElement('div');
+                body.className = `category-body ${isOpen ? 'open' : ''}`;
+
                 groupItems.forEach((item, indexInGroup) => {
                     const { filter, originalIndex } = item;
-                    
-                    // 計算上下移動要交換的目標 Index
                     const canMoveUp = indexInGroup > 0;
                     const canMoveDown = indexInGroup < groupItems.length - 1;
                     const targetIndexUp = canMoveUp ? groupItems[indexInGroup - 1].originalIndex : null;
@@ -260,23 +414,114 @@
                             <input type="text" value="${filter.subject || ''}" onchange="updateFilter(${originalIndex}, 'subject', this.value)">
                         </div>
                     `;
-                    groupDiv.appendChild(card);
+                    body.appendChild(card);
                 });
 
+                groupDiv.appendChild(body);
                 container.appendChild(groupDiv);
             }
         }
 
+        // --- 摺疊控制邏輯 ---
+        function toggleGroup(category) {
+            groupOpenState[category] = !groupOpenState[category];
+            renderFilters();
+        }
+
+        function setAllGroupsState(isOpen) {
+            for (let category in groupOpenState) {
+                groupOpenState[category] = isOpen;
+            }
+            renderFilters();
+        }
+
+        // --- 標籤總管邏輯 ---
+        function renderTags() {
+            const container = document.getElementById('tags-container');
+            
+            // 統計所有完整標籤的數量
+            const tagMap = {};
+            filters.forEach(f => {
+                const lbl = f.label ? f.label.trim() : '(空白標籤)';
+                if (!tagMap[lbl]) tagMap[lbl] = 0;
+                tagMap[lbl]++;
+            });
+
+            const tags = Object.keys(tagMap).sort();
+
+            if (tags.length === 0 || (tags.length === 1 && tags[0] === '(空白標籤)' && tagMap[tags[0]] === 0)) {
+                container.innerHTML = `<div class="empty-state">目前沒有任何標籤記錄。</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            tags.forEach((tag, index) => {
+                if (tag === '(空白標籤)') return; // 略過完全空白未填寫的
+
+                const div = document.createElement('div');
+                div.className = 'tag-list-item';
+                div.innerHTML = `
+                    <div class="tag-name-box">
+                        <strong style="color: #2c3e50; font-size: 1.1em;">🏷️ ${tag}</strong>
+                        <span class="count-badge" style="background-color: #9b59b6;">${tagMap[tag]} 個篩選器使用</span>
+                    </div>
+                    <div class="tag-edit-box">
+                        <input type="text" id="edit-tag-${index}" value="${tag}">
+                        <button class="btn btn-save" onclick="updateGlobalTag('${escapeHtml(tag)}', document.getElementById('edit-tag-${index}').value)">更新套用</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function updateGlobalTag(oldTag, newTag) {
+            newTag = newTag.trim();
+            if (!newTag || newTag === oldTag) return;
+
+            let updatedCount = 0;
+            filters.forEach(f => {
+                if (f.label && f.label.trim() === oldTag) {
+                    f.label = newTag;
+                    updatedCount++;
+                }
+            });
+
+            alert(`成功！已將 ${updatedCount} 個篩選器的標籤更新為：「${newTag}」`);
+            
+            // 若新標籤產生了新的大分類，預設將其展開以便檢視
+            const newCategory = getCategory(newTag);
+            groupOpenState[newCategory] = true;
+
+            // 重新渲染當前畫面
+            renderTags();
+        }
+
+        // HTML 跳脫處理 (防禦性設計，避免標籤內有單引號導致 onclick 失效)
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        // --- 基礎編輯器邏輯 ---
         function updateFilter(index, field, value) {
             filters[index][field] = value.trim();
-            // 如果修改的是 label，必須重新渲染來更新分類群組
             if (field === 'label') {
+                const newCategory = getCategory(filters[index].label);
+                // 使用者自己手動改了分類，主動把那個分類打開
+                groupOpenState[newCategory] = true; 
                 renderFilters();
             }
         }
 
         function addFilter() {
+            switchTab('editor'); // 強制切回編輯器
             filters.push({ from: '', to: '', subject: '', label: '' });
+            // 新增的會在未分類，強制展開未分類群組
+            groupOpenState['未分類 (請填寫標籤)'] = true;
             renderFilters();
             window.scrollTo(0, document.body.scrollHeight);
         }
@@ -286,7 +531,6 @@
             renderFilters();
         }
 
-        // 交換兩個篩選器在原始陣列中的位置 (僅限同群組內交換)
         function swapFilters(index1, index2) {
             if (index1 !== null && index2 !== null) {
                 [filters[index1], filters[index2]] = [filters[index2], filters[index1]];
@@ -294,6 +538,7 @@
             }
         }
 
+        // --- 匯入/匯出邏輯 ---
         function importXML(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -329,8 +574,9 @@
 
                 if (newFilters.length > 0) {
                     filters = newFilters;
+                    groupOpenState = {}; // 重置摺疊狀態，全數回歸預設收合(false)
                     renderFilters();
-                    alert(`成功匯入 ${newFilters.length} 個篩選器！已自動為您分類。`);
+                    alert(`成功匯入 ${newFilters.length} 個篩選器！`);
                 } else {
                     alert("無法在檔案中找到有效的篩選器條目。");
                 }
@@ -358,7 +604,6 @@
             filters.forEach((f, i) => {
                 if (!f.from && !f.to && !f.subject && !f.label) return;
 
-                // 動態計算並輸出註解，方便原始碼閱讀
                 const categoryName = getCategory(f.label);
                 if (categoryName && categoryName !== '未分類 (請填寫標籤)') {
                     xml += `\n\t\n`;
